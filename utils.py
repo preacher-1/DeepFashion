@@ -1,5 +1,6 @@
 import torch
-
+from rouge import Rouge
+import numpy as np
 
 def get_parameter_number(model):
     total_num = sum(p.numel() for p in model.parameters())
@@ -38,3 +39,85 @@ def generate_caption(model, image, vocab, vocab_idx2word, device, max_length=50)
                 break
 
         return decode_sequence(seq.squeeze(), vocab_idx2word)
+
+
+def calculate_rouge_scores(predictions, references):
+    """
+    计算ROUGE-L分数
+    Args:
+        predictions: 预测的描述列表
+        references: 参考描述列表
+    Returns:
+        dict: 包含ROUGE-L分数的字典
+    """
+    rouge = Rouge()
+    # 确保输入不为空
+    filtered_pairs = [
+        (p, r) for p, r in zip(predictions, references) 
+        if len(p.strip()) > 0 and len(r.strip()) > 0
+    ]
+    
+    if not filtered_pairs:
+        return {'rouge-l': {'f': 0.0, 'p': 0.0, 'r': 0.0}}
+    
+    predictions, references = zip(*filtered_pairs)
+    
+    try:
+        scores = rouge.get_scores(predictions, references, avg=True)
+        return scores
+    except Exception as e:
+        print(f"Error calculating ROUGE scores: {e}")
+        return {'rouge-l': {'f': 0.0, 'p': 0.0, 'r': 0.0}}
+
+
+def evaluate_model(model, dataloader, vocab, device, num_samples=None):
+    """
+    使用ROUGE-L评估模型性能
+    Args:
+        model: 图像描述模型
+        dataloader: 数据加载器
+        vocab: 词表
+        device: 设备
+        num_samples: 评估样本数量（None表示使用全部数据）
+    Returns:
+        dict: ROUGE-L分数
+    """
+    model.eval()
+    predictions = []
+    references = []
+    
+    # 创建词表的反向映射
+    id2word = {v: k for k, v in vocab.items()}
+    
+    with torch.no_grad():
+        for i, (images, captions) in enumerate(dataloader):
+            if num_samples and i * dataloader.batch_size >= num_samples:
+                break
+                
+            images = images.to(device)
+            batch_size = images.size(0)
+            
+            # 生成描述
+            for j in range(batch_size):
+                if num_samples and len(predictions) >= num_samples:
+                    break
+                    
+                # 生成预测描述
+                generated_words = model.generate(
+                    images[j:j+1],
+                    max_len=50,
+                    temperature=1.0,
+                    vocab=vocab
+                )
+                pred_caption = ' '.join(generated_words)
+                
+                # 获取参考描述
+                ref_caption = ' '.join(decode_sequence(captions[j], id2word))
+                
+                predictions.append(pred_caption)
+                references.append(ref_caption)
+    
+    # 计算ROUGE分数
+    rouge_scores = calculate_rouge_scores(predictions, references)
+    
+    return rouge_scores, predictions, references
