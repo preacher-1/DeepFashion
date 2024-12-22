@@ -11,20 +11,29 @@ class PositionalEncoding(nn.Module):
         # 创建位置编码矩阵
         pe = torch.zeros(max_len, d_model)
         position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+        div_term = torch.exp(
+            torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)
+        )
 
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
         pe = pe.unsqueeze(0).transpose(0, 1)
 
-        self.register_buffer('pe', pe)
+        self.register_buffer("pe", pe)
 
     def forward(self, x):
-        return x + self.pe[:x.size(0), :]
+        return x + self.pe[: x.size(0), :]
 
 
 class ImageCaptioningModel(nn.Module):
-    def __init__(self, vocab_size, hidden_dim=512, nhead=8, num_encoder_layers=6, num_decoder_layers=6):
+    def __init__(
+            self,
+            vocab_size,
+            hidden_dim=512,
+            nhead=8,
+            num_encoder_layers=6,
+            num_decoder_layers=6,
+    ):
         super().__init__()
 
         # CNN Encoder
@@ -42,7 +51,7 @@ class ImageCaptioningModel(nn.Module):
             d_model=hidden_dim,
             nhead=nhead,
             num_encoder_layers=num_encoder_layers,
-            num_decoder_layers=num_decoder_layers
+            num_decoder_layers=num_decoder_layers,
         )
 
         # 输出层
@@ -54,12 +63,16 @@ class ImageCaptioningModel(nn.Module):
     def generate_square_subsequent_mask(self, sz):
         """生成前瞻掩码"""
         mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
-        mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
-        return mask
+        mask = (
+            mask.float()
+                .masked_fill(mask == 0, float("-inf"))
+                .masked_fill(mask == 1, float(0.0))
+        )
+        return mask.bool()
 
     def create_padding_mask(self, seq):
         """生成填充掩码"""
-        return (seq == 0).transpose(0, 1)
+        return seq == 0
 
     def forward(self, images, captions):
         """
@@ -69,33 +82,40 @@ class ImageCaptioningModel(nn.Module):
         """
         # CNN特征提取
         batch_size = images.size(0)
-        cnn_features = self.cnn(images)  # [B, 2048, H', W'] = [B, 2048, 7, 7]
-        cnn_features = cnn_features.view(batch_size, 2048, -1).permute(2, 0, 1)  # [H'W', B, 2048] = [49, B, 2048]
+        cnn_features = self.cnn(images)  # [B, 2048, 7, 7]
+        cnn_features = cnn_features.view(batch_size, 2048, -1).permute(
+            2, 0, 1
+        )  # [49, B, 2048]
 
-        # 特征映射并添加位置编码
-        encoder_features = self.feature_projection(cnn_features)  # [H'W', B, hidden_dim]
+        # 特征映射和位置编码
+        encoder_features = self.feature_projection(cnn_features)  # [49, B, 512]
         encoder_features = self.pos_encoder(encoder_features)
 
-        # 词嵌入并添加位置编码
-        caption_embeddings = self.embedding(captions).permute(1, 0, 2)  # [seq_len, B, hidden_dim]
-        caption_embeddings = self.pos_encoder(caption_embeddings)
+        # 准备解码器输入
+        tgt = captions[:, :-1]  # [B, T] 去除[END]标记
+        tgt_embeddings = self.embedding(tgt)  # [B, T, 512]
+        tgt_embeddings = tgt_embeddings.permute(1, 0, 2)  # [T, B, 512]
+        tgt_embeddings = self.pos_encoder(tgt_embeddings)
 
         # 创建掩码
-        tgt_mask = self.generate_square_subsequent_mask(captions.size(1) - 1).to(images.device)
-        tgt_padding_mask = self.create_padding_mask(captions[:, :-1]).to(images.device)
+        tgt_len = tgt.size(1)
+        # 自注意力掩码 [T, T]
+        tgt_mask = self.generate_square_subsequent_mask(tgt_len).to(images.device)
+        # 填充掩码 [B, T]
+        tgt_padding_mask = self.create_padding_mask(tgt).to(images.device)
 
         # Transformer前向传播
         output = self.transformer(
-            encoder_features,
-            caption_embeddings[:, :, :-1],
-            tgt_mask=tgt_mask,
-            tgt_key_padding_mask=tgt_padding_mask
+            src=encoder_features,  # [49, B, 512]
+            tgt=tgt_embeddings,  # [T, B, 512]
+            tgt_mask=tgt_mask,  # [T, T]
+            tgt_key_padding_mask=tgt_padding_mask,  # [B, T]
         )
 
         # 输出层
-        output = self.fc_out(output)  # [seq_len, B, vocab_size]
+        output = self.fc_out(output)  # [T, B, vocab_size]
 
-        return output
+        return output.permute(1, 0, 2)
 
     @torch.no_grad()
     def generate(self, image, max_len=50, temperature=1.0, vocab=None):
@@ -138,7 +158,9 @@ class ImageCaptioningModel(nn.Module):
             tgt = self.pos_encoder(tgt)
 
             # 创建掩码
-            tgt_mask = self.generate_square_subsequent_mask(current_token.size(1)).to(device)
+            tgt_mask = self.generate_square_subsequent_mask(current_token.size(1)).to(
+                device
+            )
             tgt_padding_mask = self.create_padding_mask(current_token).to(device)
 
             # Transformer解码
@@ -146,7 +168,7 @@ class ImageCaptioningModel(nn.Module):
                 encoder_features,
                 tgt,
                 tgt_mask=tgt_mask,
-                tgt_key_padding_mask=tgt_padding_mask
+                tgt_key_padding_mask=tgt_padding_mask,
             )
 
             # 获取下一个词的预测
@@ -170,10 +192,10 @@ class ImageCaptioningModel(nn.Module):
         # 如果提供了词表，转换为词序列
         if vocab is not None:
             id2word = {v: k for k, v in vocab.items()}
-            words = [id2word.get(idx, '[UNK]') for idx in output_tokens]
+            words = [id2word.get(idx, "[UNK]") for idx in output_tokens]
             # 移除[START]和[END]标记
             words = words[1:]
-            if words[-1] == '[END]':
+            if words[-1] == "[END]":
                 words = words[:-1]
             return words
 

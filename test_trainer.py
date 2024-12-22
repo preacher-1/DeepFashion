@@ -21,13 +21,16 @@ class CaptioningTrainer:
             images = images.to(self.device)
             captions = captions.to(self.device)
 
-            # 教师强制训练
-            outputs = self.model(images, captions[:, :-1])  # 去除[END]标记
-
+            # 前向传播
+            outputs = self.model(images, captions)  # [B, T, vocab_size]
+            
+            # 准备目标序列
+            targets = captions[:, 1:]  # 去除[START]标记
+            
             # 计算损失
             loss = self.criterion(
-                outputs.view(-1, outputs.size(-1)),
-                captions[:, 1:].contiguous().view(-1)  # 去除[START]标记
+                outputs.reshape(-1, outputs.size(-1)),  # [B*T, vocab_size]
+                targets.reshape(-1)  # [B*T]
             )
 
             # 反向传播
@@ -49,19 +52,25 @@ class CaptioningTrainer:
     def validate(self, dataloader):
         self.model.eval()
         total_loss = 0
+        
         with torch.no_grad():
             for batch in dataloader:
                 images, captions = batch
                 images = images.to(self.device)
                 captions = captions.to(self.device)
 
-                # 计算损失
-                outputs = self.model(images, captions[:, :-1])  # 去除[END]标记
+                # 前向传播
+                outputs = self.model(images, captions)  # [B, T, vocab_size]
+                
+                # 准备目标序列
+                targets = captions[:, 1:]  # 去除[START]标记
+                
+                # 计算损失 - 使用reshape代替view
                 loss = self.criterion(
-                    outputs.view(-1, outputs.size(-1)),
-                    captions[:, 1:].contiguous().view(-1)  # 去除[START]标记
+                    outputs.reshape(-1, outputs.size(-1)),  # [B*T, vocab_size]
+                    targets.reshape(-1)  # [B*T]
                 )
-
+                
                 total_loss += loss.item()
 
         return total_loss / len(dataloader)

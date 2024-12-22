@@ -7,6 +7,7 @@ from utils import *
 from torch.utils.tensorboard import SummaryWriter
 import matplotlib.pyplot as plt
 import os
+import json
 from datetime import datetime
 
 writer = SummaryWriter("logs/deepfashion_multimodal_experiment_1")
@@ -132,45 +133,43 @@ def main():
     # model.load_state_dict(torch.load('checkpoints/best_model.pth'))
     # test_generation(model, test_loader, vocab, device)
 
-    # 6. 训练完成后进行ROUGE-L评估
-    print("\n开始ROUGE-L评估...")
-    model.load_state_dict(torch.load("checkpoints/best_model.pth"))
-    rouge_scores, predictions, references = evaluate_model(
-        model, test_loader, vocab, device, num_samples=50  # 可以调整评估样本数量
-    )
-
-    # 打印ROUGE-L分数
-    print("\nROUGE-L Scores:")
-    print(f"F1: {rouge_scores['rouge-l']['f']:.4f}")
-    print(f"Precision: {rouge_scores['rouge-l']['p']:.4f}")
-    print(f"Recall: {rouge_scores['rouge-l']['r']:.4f}")
-
-    # 保存评估结果
-    current_time = datetime.strftime("%y%m%d%H%M%S")
-    evaluation_results = {
-        "rouge_scores": rouge_scores,
-        "predictions": predictions[:10],  # 保存前10个预测样例
-        "references": references[:10],  # 保存前10个参考样例
-        "timestamp": current_time,
-    }
-
-    import json
-
-    with open(f"evaluation_results_{current_time}.json", "w", encoding="utf-8") as f:
-        json.dump(evaluation_results, f, ensure_ascii=False, indent=4)
-
-    # 记录到tensorboard
-    writer.add_scalar("ROUGE-L/F1", rouge_scores["rouge-l"]["f"])
-    writer.add_scalar("ROUGE-L/Precision", rouge_scores["rouge-l"]["p"])
-    writer.add_scalar("ROUGE-L/Recall", rouge_scores["rouge-l"]["r"])
-
-    # 添加一些生成样例到tensorboard
-    writer.add_text(
-        "Generation Examples",
-        "\n\n".join(
-            [f"Pred: {p}\nRef: {r}" for p, r in zip(predictions[:5], references[:5])]
-        ),
-    )
+    # # 6. 训练完成后进行ROUGE-L评估
+    # print("\n开始ROUGE-L评估...")
+    # model.load_state_dict(torch.load("checkpoints/best_model.pth"))
+    # rouge_scores, predictions, references = evaluate_model(
+    #     model, test_loader, vocab, device, num_samples=50  # 可以调整评估样本数量
+    # )
+    #
+    # # 打印ROUGE-L分数
+    # print("\nROUGE-L Scores:")
+    # print(f"F1: {rouge_scores['rouge-l']['f']:.4f}")
+    # print(f"Precision: {rouge_scores['rouge-l']['p']:.4f}")
+    # print(f"Recall: {rouge_scores['rouge-l']['r']:.4f}")
+    #
+    # # 保存评估结果
+    # current_time = datetime.strftime("%y%m%d%H%M%S")
+    # evaluation_results = {
+    #     "rouge_scores": rouge_scores,
+    #     "predictions": predictions[:10],  # 保存前10个预测样例
+    #     "references": references[:10],  # 保存前10个参考样例
+    #     "timestamp": current_time,
+    # }
+    #
+    # with open(f"evaluation_results_{current_time}.json", "w", encoding="utf-8") as f:
+    #     json.dump(evaluation_results, f, ensure_ascii=False, indent=4)
+    #
+    # # 记录到tensorboard
+    # writer.add_scalar("ROUGE-L/F1", rouge_scores["rouge-l"]["f"])
+    # writer.add_scalar("ROUGE-L/Precision", rouge_scores["rouge-l"]["p"])
+    # writer.add_scalar("ROUGE-L/Recall", rouge_scores["rouge-l"]["r"])
+    #
+    # # 添加一些生成样例到tensorboard
+    # writer.add_text(
+    #     "Generation Examples",
+    #     "\n\n".join(
+    #         [f"Pred: {p}\nRef: {r}" for p, r in zip(predictions[:5], references[:5])]
+    #     ),
+    # )
 
 
 if __name__ == "__main__":
