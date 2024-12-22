@@ -117,8 +117,8 @@ def main():
 
             # 保存模型
             if (epoch + 1) % 3 == 0:
-                torch.save(model.state_dict(), f".checkpoints/model_{epoch + 1}.pth")
-                print(f"Model saved to .checkpoints/model_{epoch + 1}.pth")
+                torch.save(model.state_dict(), f"checkpoints/model_{epoch + 1}.pth")
+                print(f"Model saved to checkpoints/model_{epoch + 1}.pth")
 
             # 早停
             # 如果验证集上的损失更好，则更新最佳模型参数
@@ -136,9 +136,9 @@ def main():
                 break
         except Exception as e:
             print(f"Training stopped at epoch {epoch + 1}, error: {e}")
-            if not os.path.exists(f".checkpoints/model_{epoch + 1}.pth"):
-                torch.save(model.state_dict(), f".checkpoints/model_{epoch + 1}.pth")
-                print(f"Model saved to .checkpoints/model_{epoch + 1}.pth")
+            if not os.path.exists(f"checkpoints/model_{epoch + 1}.pth"):
+                torch.save(model.state_dict(), f"checkpoints/model_{epoch + 1}.pth")
+                print(f"Model saved to checkpoints/model_{epoch + 1}.pth")
             break
 
     # 6. 预测
