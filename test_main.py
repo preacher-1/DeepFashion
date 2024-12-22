@@ -18,7 +18,7 @@ config = {
     "train_json_path": "data/deepfashion-multimodal/train_captions.json",
     "test_json_path": "data/deepfashion-multimodal/test_captions.json",
     "vocab_file": "data/deepfashion-multimodal/vocab.json",
-    "batch_size": 32,
+    "batch_size": 64,
     "hidden_dim": 512,
     "nhead": 8,
     "num_encoder_layers": 6,
@@ -52,6 +52,16 @@ def test_generation(model, val_loader, vocab, device, num_samples=5):
         print(f"真实描述: {' '.join(true_caption)}")
 
 
+def check_frozen_params(model):
+    """检查模型中的冻结参数"""
+    for name, param in model.named_parameters():
+        if 'cnn' in name:
+            assert not param.requires_grad, f"CNN参数 {name} 未被冻结"
+        else:
+            assert param.requires_grad, f"非CNN参数 {name} 被错误地冻结"
+    print("参数冻结检查通过！")
+
+
 # 训练流程
 def main():
     # 1. 数据加载
@@ -72,6 +82,9 @@ def main():
     )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
+
+    # 检查参数冻结情况
+    check_frozen_params(model)
 
     # 3. 优化器和损失函数
     optimizer = torch.optim.Adam(model.parameters(), lr=config["learning_rate"])
@@ -100,34 +113,33 @@ def main():
 
             # 记录损失
             loss_history.append(loss)
-            steps_loss_history.update(steps_loss)
+            steps_loss_history.extend(steps_loss)
 
             # 保存模型
             if (epoch + 1) % 3 == 0:
                 torch.save(model.state_dict(), f".checkpoints/model_{epoch + 1}.pth")
                 print(f"Model saved to .checkpoints/model_{epoch + 1}.pth")
 
-                # 早停
-                # 如果验证集上的损失更好，则更新最佳模型参数
-                if val_loss < best_loss:
-                    best_loss = val_loss
-                    epochs_without_improvement = 0
-                    best_model_weights = model.state_dict()
-                else:
-                    epochs_without_improvement += 1
+            # 早停
+            # 如果验证集上的损失更好，则更新最佳模型参数
+            if val_loss < best_loss:
+                best_loss = val_loss
+                epochs_without_improvement = 0
+                best_model_weights = model.state_dict()
+            else:
+                epochs_without_improvement += 1
 
-                # 如果验证集上的损失连续patience个epoch没有提高，则停止训练
-                if epochs_without_improvement == patience:
-                    model.load_state_dict(best_model_weights)
-                    print(f"Early stopping at epoch {epoch + 1}...")
-                    break
+            # 如果验证集上的损失连续patience个epoch没有提高，则停止训练
+            if epochs_without_improvement == patience:
+                model.load_state_dict(best_model_weights)
+                print(f"Early stopping at epoch {epoch + 1}...")
+                break
         except Exception as e:
             print(f"Training stopped at epoch {epoch + 1}, error: {e}")
-            break
-        finally:
             if not os.path.exists(f".checkpoints/model_{epoch + 1}.pth"):
                 torch.save(model.state_dict(), f".checkpoints/model_{epoch + 1}.pth")
                 print(f"Model saved to .checkpoints/model_{epoch + 1}.pth")
+            break
 
     # 6. 预测
     # model.load_state_dict(torch.load('checkpoints/best_model.pth'))

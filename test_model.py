@@ -36,9 +36,13 @@ class ImageCaptioningModel(nn.Module):
     ):
         super().__init__()
 
-        # CNN Encoder
+        # CNN Encoder (使用预训练的ResNet)
         resnet = torchvision.models.resnet50(pretrained=True)
         self.cnn = nn.Sequential(*list(resnet.children())[:-2])
+
+        # 冻结CNN参数
+        for param in self.cnn.parameters():
+            param.requires_grad = False
 
         # 特征映射层
         self.feature_projection = nn.Linear(2048, hidden_dim)
