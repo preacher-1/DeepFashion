@@ -23,8 +23,8 @@ config = {
     "nhead": 8,
     "num_encoder_layers": 6,
     "num_decoder_layers": 6,
-    "learning_rate": 1e-4,
-    "epochs": 50,
+    "learning_rate": 2e-4,
+    "epochs": 30,
     "clip_grad": 5.0,
 }
 
