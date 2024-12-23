@@ -8,6 +8,7 @@ from torchvision import models
 from resnet_module import ResNetModule, resnet34
 from torchvision.transforms import transforms
 from torch.utils.data import DataLoader, Dataset
+from torch.nn.utils.rnn import pack_padded_sequence
 
 """
 网格表示+Transformer 编码器+解码器
@@ -17,11 +18,11 @@ Transformer编码器输出的全局特征表示送入解码器，从<start>开�
 """
 
 
-# 使用ResNet18作为特征提取器
+# 使用ResNet50作为特征提取器
 class ResNet(nn.Module):
     def __init__(self):
         super(ResNet, self).__init__()
-        self.resnet = models.resnet18(pretrained=True)
+        self.resnet = models.resnet50(pretrained=True)
         self.resnet.fc = nn.Linear(512, 512)
 
     def forward(self, x):
@@ -157,6 +158,33 @@ class ImageCaptionModel(nn.Module):
         output = self.linear3(output)
         return output
 
+    def generate_caption(self, x, max_len=20):
+        # 特征提取
+        feature_map = self.resnet_module(x)
+        # 网格划分
+        grid_embedding = self.grid_module(feature_map)
+        # 特征融合
+        feature_fusion = self.feature_fusion_module(grid_embedding, feature_map)
+        # 位置编码
+        src = self.positional_encoding(feature_fusion)
+        # Transformer编码器
+        memory = self.transformer_encoder(src)
+        # 解码器初始化
+        tgt = torch.zeros(1, 1).long().to(x.device)
+        tgt_mask = self.transformer_decoder.generate_square_subsequent_mask(1).to(x.device)
+        # 解码器
+        for i in range(max_len):
+            output = self.transformer_decoder(tgt, memory, tgt_mask)
+            output = self.linear(output)
+            output = self.linear2(output)
+            output = self.linear3(output)
+            output = F.softmax(output, dim=1)
+            _, predicted_index = torch.max(output, dim=1)
+            tgt = torch.cat((tgt, predicted_index.unsqueeze(0)), dim=1)
+            if predicted_index == 1:
+                break
+        return tgt.squeeze(0)
+
 
 # # 训练模型
 # def train_model(model, train_loader, optimizer, criterion, device):
@@ -200,17 +228,20 @@ class ImageCaptionModel(nn.Module):
 #     val_loss = validate_model(model, val_loader, criterion, device)
 
 # 模型实例化
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model = ImageCaptionModel(feature_size=512, grid_size=16, d_model=512, nhead=8, num_encoder_layers=6,
-                          dim_feedforward=2048, dropout=0.1, num_decoder_layers=6).to(device)
 
-# 加载图文数据集
-transform = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-])
-
+# # 损失函数
+# class PackedCrossEntropyLoss(nn.Module):
+#     def __init__(self):
+#         super(PackedCrossEntropyLoss, self).__init__()
+#         self.loss_fn = nn.CrossEntropyLoss()
+#
+#     def forward(self, predictions, targets, lengths):
+#         packed_predictions = pack_padded_sequence(predictions, lengths, batch_first=True, enforce_sorted=False)[0]
+#         packed_targets = pack_padded_sequence(targets, lengths, batch_first=True, enforce_sorted=False)[0]
+#
+#         # 计算损失，忽略填充的部分
+#         loss = self.loss_fn(packed_predictions, packed_targets)
+#         return loss
 
 # class ImageCaptionDataset(Dataset):
 #     def __init__(self,root_dir, transform=None):

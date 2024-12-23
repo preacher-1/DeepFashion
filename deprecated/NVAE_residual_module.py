@@ -84,7 +84,8 @@ class Cell(nn.Module):
         x = self.bn2(x)
         x = self.se(x)
 
-        return skip + x * 0.1  # skip connection and residual learning
+        # return skip + x * 0.1  # original paper
+        return skip + x  # skip connection and residual learning
 
 
 class ConvTower(nn.Module):

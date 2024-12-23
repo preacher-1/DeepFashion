@@ -14,7 +14,7 @@ class ImageDescriptionDataset(Dataset):
             img_folder (str): Path to the folder containing images.
             transform (callable, optional): Transform to apply to the images.
         """
-        self.word_to_idx = None
+        self.word_to_idx = {}
         self.vocab = Counter()
         self.img_folder = img_folder
         self.transform = transform
@@ -30,6 +30,7 @@ class ImageDescriptionDataset(Dataset):
         self.length = len(self.filenames)
 
         self.textdata_transform()
+        self.vocal_size = len(self.word_to_idx)
 
     def __len__(self):
         return self.length
@@ -58,7 +59,7 @@ class ImageDescriptionDataset(Dataset):
         # self.vocab = {k: v for k, v in self.vocab.items() if v >= 5}
 
         # 构建词典
-        self.word_to_idx = {word: idx+4 for idx, word in enumerate(self.vocab)}
+        self.word_to_idx = {word: idx + 4 for idx, word in enumerate(self.vocab)}
         self.word_to_idx['<pad>'] = 0
         self.word_to_idx['<start>'] = 1
         self.word_to_idx['<end>'] = 2
@@ -80,7 +81,6 @@ def build_dataloader(json_path, img_folder, transform, batch_size, shuffle=True,
     dataset = ImageDescriptionDataset(json_path, img_folder, transform)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
     return dataloader
-
 
 # # Example usage
 # transform = transforms.Compose([
