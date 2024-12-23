@@ -4,7 +4,7 @@ from PIL import Image
 import base64
 import json
 import matplotlib.pyplot as plt
-from test_main import config
+from main import config
 
 prompt = """
 ## Task

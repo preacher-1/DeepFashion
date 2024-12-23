@@ -122,7 +122,9 @@ class ImageCaptioningModel(nn.Module):
         return output.permute(1, 0, 2)
 
     @torch.no_grad()
-    def generate(self, image, max_len=50, temperature=1.0, vocab=None):
+    def generate(
+            self, image, max_len=50, temperature=1.0, vocab=None
+    ) -> list | torch.Tensor:
         """
         生成图像描述
         Args:
@@ -187,7 +189,7 @@ class ImageCaptioningModel(nn.Module):
 
             # 添加到输出序列
             output_tokens.append(next_token.item())
-            current_token = torch.cat([current_token, next_token.unsqueeze(0)], dim=1)
+            current_token = torch.cat([current_token, next_token], dim=1)
 
             # 如果生成了[END]标记，停止生成
             if next_token.item() == 2:  # [END] token
